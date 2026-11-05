@@ -37,6 +37,12 @@ PROPERTIES = [
 
 OBJECTS = ["contacts", "companies"]
 
+DEAL_PROPERTY = {
+    "name": "stripe_subscription_id", "label": "Stripe subscription ID", "type": "string",
+    "fieldType": "text", "groupName": "dealinformation", "hasUniqueValue": True,
+    "description": "Stripe sub_ ID. Unique, so one subscription can never create two deals.",
+}
+
 
 def main() -> None:
     hs = HubSpotClient()
@@ -59,6 +65,18 @@ def main() -> None:
                 print(f"  {prop['name']} already exists (skipped)")
             else:
                 raise HubSpotError(f"{prop['name']} on {obj} failed: {r.status_code} {r.text}")
+
+    # Deals: one property linking each deal to its Stripe subscription (Phase 2).
+    print("\n== deals ==")
+    r = hs.post("/crm/v3/properties/deals", json=DEAL_PROPERTY)
+    if r.status_code in (200, 201):
+        print(f"  created {DEAL_PROPERTY['name']}")
+    elif r.status_code == 409:
+        print(f"  {DEAL_PROPERTY['name']} already exists (skipped)")
+    elif r.status_code == 403:
+        raise HubSpotError("403 on deals: add the crm.schemas.deals.write scope to your Service Key, then rerun.")
+    else:
+        raise HubSpotError(f"deal property failed: {r.status_code} {r.text}")
     print("\nDone. Check Settings > Properties > group 'Billing (synced from Stripe)'.")
 
 
