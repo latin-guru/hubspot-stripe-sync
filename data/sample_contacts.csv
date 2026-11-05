@@ -1,0 +1,39 @@
+email,firstname,lastname,jobtitle,company_domain,is_billing_contact
+lindsey.chase@rodriguezfigueroaand.example.com,Lindsey,Chase,Finance Manager,rodriguezfigueroaand.example.com,true
+corey.pearson@millerhendersonandjo.example.com,Corey,Pearson,Finance Manager,millerhendersonandjo.example.com,true
+amber.smith@gonzalezsantosandgar.example.com,Amber,Smith,Finance Manager,gonzalezsantosandgar.example.com,true
+christopher.molina@blakeandsons.example.com,Christopher,Molina,Finance Manager,blakeandsons.example.com,true
+joel.russell@garciajames.example.com,Joel,Russell,Finance Manager,garciajames.example.com,true
+timothy.hancock@blairplc.example.com,Timothy,Hancock,Finance Manager,blairplc.example.com,true
+rachel.martin@montgomeryhensleyand.example.com,Rachel,Martin,Finance Manager,montgomeryhensleyand.example.com,true
+aaron.myers@delacruzgroup.example.com,Aaron,Myers,Finance Manager,delacruzgroup.example.com,true
+sara.glover@delacruzgroup.example.com,Sara,Glover,Higher education lecturer,delacruzgroup.example.com,false
+rodney.bernard@kellysantiago.example.com,Rodney,Bernard,Finance Manager,kellysantiago.example.com,true
+wendy.peters@martingroup.example.com,Wendy,Peters,Finance Manager,martingroup.example.com,true
+jennifer.moore@nguyentateandbrown.example.com,Jennifer,Moore,Finance Manager,nguyentateandbrown.example.com,true
+kenneth.novak@gentryplc.example.com,Kenneth,Novak,Finance Manager,gentryplc.example.com,true
+beth.daniels@gentryplc.example.com,Beth,Daniels,Interior and spatial designer,gentryplc.example.com,false
+brian.silva@ellisbakerandwright.example.com,Brian,Silva,Finance Manager,ellisbakerandwright.example.com,true
+wesley.farrell@ellisbakerandwright.example.com,Wesley,Farrell,Designer industrial/product,ellisbakerandwright.example.com,false
+brian.romero@rossrobinsonandbrigh.example.com,Brian,Romero,Finance Manager,rossrobinsonandbrigh.example.com,true
+melissa.jones@hernandezandsons.example.com,Melissa,Jones,Finance Manager,hernandezandsons.example.com,true
+carlos.hensley@ferrellriceandmaddox.example.com,Carlos,Hensley,Finance Manager,ferrellriceandmaddox.example.com,true
+richard.david@mackpeterson.example.com,Richard,David,Finance Manager,mackpeterson.example.com,true
+ashley.riley@liubakerandmason.example.com,Ashley,Riley,Finance Manager,liubakerandmason.example.com,true
+bernard.miller@evansfowlerandlynch.example.com,Bernard,Miller,Finance Manager,evansfowlerandlynch.example.com,true
+diane.cunningham@evansfowlerandlynch.example.com,Diane,Cunningham,Interpreter,evansfowlerandlynch.example.com,false
+sarah.harris@sellersgeorgeandburn.example.com,Sarah,Harris,Finance Manager,sellersgeorgeandburn.example.com,true
+jennifer.allen@allenplc.example.com,Jennifer,Allen,Finance Manager,allenplc.example.com,true
+randy.powers@cannonandersonandalv.example.com,Randy,Powers,Finance Manager,cannonandersonandalv.example.com,true
+kevin.stewart@brandthickman.example.com,Kevin,Stewart,Finance Manager,brandthickman.example.com,true
+karen.jones@brandthickman.example.com,Karen,Jones,Proofreader,brandthickman.example.com,false
+christine.hart@brookslamandhayes.example.com,Christine,Hart,Finance Manager,brookslamandhayes.example.com,true
+craig.medina@spencerchapmanandsmi.example.com,Craig,Medina,Finance Manager,spencerchapmanandsmi.example.com,true
+william.anderson@jonesyoung.example.com,William,Anderson,Finance Manager,jonesyoung.example.com,true
+michael.jones@johnstonsanchezandke.example.com,Michael,Jones,Finance Manager,johnstonsanchezandke.example.com,true
+john.mitchell@gomezjenkins.example.com,John,Mitchell,Finance Manager,gomezjenkins.example.com,true
+samuel.daniels@gomezjenkins.example.com,Samuel,Daniels,Immigration officer,gomezjenkins.example.com,false
+cheryl.archer@chandlermcbride.example.com,Cheryl,Archer,Finance Manager,chandlermcbride.example.com,true
+destiny.smith@chandlermcbride.example.com,Destiny,Smith,Surveyor building,chandlermcbride.example.com,false
+kevin.alvarado@hendersonllc.example.com,Kevin,Alvarado,Finance Manager,hendersonllc.example.com,true
+sheila.taylor@hendersonllc.example.com,Sheila,Taylor,Commercial art gallery manager,hendersonllc.example.com,false
