@@ -7,7 +7,7 @@ Fictional company: **Northwind Loop**, a B2B SaaS selling Starter / Growth / Sca
 > Status: Phase 1 (data model) complete. Phases 2–4 in progress. Items not built yet are marked *Roadmap*.
 
 ## Architecture
-_Diagram coming (docs/architecture.png)._
+![Architecture](docs/architecture.png)
 
 ## Data model
 - Custom property group **Billing (synced from Stripe)** on Contact and Company: `plan_tier`, `mrr`, `billing_status`, `stripe_customer_id`, `last_payment_date`, `sync_source`.
