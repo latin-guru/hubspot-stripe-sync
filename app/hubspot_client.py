@@ -32,7 +32,15 @@ class HubSpotClient:
 
     def request(self, method: str, path: str, **kwargs) -> requests.Response:
         for attempt in range(self.max_retries + 1):
-            resp = self.session.request(method, BASE_URL + path, timeout=30, **kwargs)
+            try:
+                resp = self.session.request(method, BASE_URL + path, timeout=30, **kwargs)
+            except (requests.ConnectionError, requests.Timeout) as exc:
+                # Idle keep-alive connections get closed by HubSpot; reconnect and retry.
+                if attempt == self.max_retries:
+                    raise HubSpotError(f"{method} {path} failed after retries: {exc}") from exc
+                print(f"  connection dropped ({type(exc).__name__}), retrying in {2 ** attempt}s...")
+                time.sleep(2 ** attempt)
+                continue
             if resp.status_code == 429 or resp.status_code >= 500:
                 if attempt == self.max_retries:
                     break

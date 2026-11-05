@@ -33,6 +33,16 @@ class HubSpotAPI:
         hit = self._search_one("deals", "stripe_subscription_id", subscription_id)
         return hit["id"] if hit else None
 
+    def get_contact(self, contact_id: str, properties) -> Optional[dict]:
+        resp = self.hs.get(f"/crm/v3/objects/contacts/{contact_id}",
+                           params={"properties": ",".join(properties)})
+        if resp.status_code == 404:
+            return None
+        return self._ok(resp, "contact get")
+
+    def find_contact_by_email(self, email: str) -> Optional[dict]:
+        return self._search_one("contacts", "email", email, props=["email", "plan_tier", "stripe_customer_id"])
+
     def update(self, obj: str, record_id: str, properties: dict) -> None:
         self._ok(self.hs.patch(f"/crm/v3/objects/{obj}/{record_id}", json={"properties": properties}),
                  f"{obj} update")

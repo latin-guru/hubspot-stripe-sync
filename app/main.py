@@ -1,7 +1,11 @@
-"""Northwind Loop billing sync: receives Stripe webhooks and updates HubSpot.
+"""Northwind Loop billing sync.
+
+- POST /webhooks/stripe   Stripe -> HubSpot (Phase 2): billing fields, deals, at-risk flag
+- POST /webhooks/hubspot  HubSpot -> Stripe (Phase 3): rep changes plan tier, Stripe follows
 
 Run:  uvicorn app.main:app --port 8000
 """
+import hmac
 import json
 import logging
 
@@ -14,10 +18,11 @@ from .handlers import StripeToHubSpot, ordering_key
 from .hubspot_api import HubSpotAPI
 from .hubspot_client import HubSpotClient
 from .store import EventStore
+from .stripe_push import HubSpotToStripe, extract_contact_id
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
-log = logging.getLogger("sync")
 logging.getLogger("stripe").setLevel(logging.WARNING)
+log = logging.getLogger("sync")
 
 app = FastAPI(title="Northwind Loop billing sync")
 state = {}
@@ -27,8 +32,10 @@ def get_state():
     """Build clients on first use so the app can start (and /health works) before keys are set."""
     if not state:
         stripe.api_key = config.STRIPE_SECRET_KEY
+        hubspot = HubSpotAPI(HubSpotClient(config.HUBSPOT_SERVICE_KEY))
         state["store"] = EventStore(config.DB_PATH)
-        state["sync"] = StripeToHubSpot(HubSpotAPI(HubSpotClient(config.HUBSPOT_SERVICE_KEY)), state["store"])
+        state["sync"] = StripeToHubSpot(hubspot, state["store"])
+        state["push"] = HubSpotToStripe(hubspot)
     return state
 
 
@@ -36,6 +43,8 @@ def get_state():
 def health():
     return {"ok": True}
 
+
+# ---------------- Stripe -> HubSpot ----------------
 
 def process_event(event: dict) -> dict:
     s = get_state()
@@ -83,3 +92,45 @@ async def stripe_webhook(request: Request):
     except Exception as exc:
         log.exception("FAILED     %s %s: %s", event.get("type"), event.get("id"), exc)
         raise HTTPException(status_code=500, detail="processing failed; Stripe will retry")
+
+
+# ---------------- HubSpot -> Stripe ----------------
+
+def secret_ok(request: Request) -> bool:
+    expected = config.HUBSPOT_WEBHOOK_SECRET
+    if not expected:
+        return False
+    given = (request.headers.get("x-sync-secret") or request.headers.get("x-api-key")
+             or request.query_params.get("secret") or "")
+    return hmac.compare_digest(given, expected)
+
+
+def process_plan_change(contact_id: str) -> dict:
+    s = get_state()
+    with s["store"].lock_for(f"contact:{contact_id}"):
+        result = s["push"].plan_changed(contact_id)
+    label = "SKIPPED   " if result.startswith("skipped") or "nothing to do" in result else "PUSHED    "
+    log.info("%s hubspot.plan_tier_changed      %s", label, result)
+    return {"status": "ok", "result": result}
+
+
+@app.post("/webhooks/hubspot")
+async def hubspot_webhook(request: Request):
+    if not secret_ok(request):
+        log.warning("REJECTED   HubSpot call with missing or wrong secret")
+        raise HTTPException(status_code=401, detail="invalid secret")
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="body must be JSON")
+
+    contact_id = extract_contact_id(body)
+    if not contact_id:
+        keys = list(body.keys()) if isinstance(body, dict) else type(body).__name__
+        log.warning("REJECTED   HubSpot payload has no contact ID (keys: %s)", keys)
+        raise HTTPException(status_code=400, detail="no contact id in payload")
+    try:
+        return await run_in_threadpool(process_plan_change, contact_id)
+    except Exception as exc:
+        log.exception("FAILED     hubspot plan change for contact %s: %s", contact_id, exc)
+        raise HTTPException(status_code=500, detail="processing failed; HubSpot will retry")

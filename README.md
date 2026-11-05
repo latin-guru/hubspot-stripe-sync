@@ -1,10 +1,10 @@
 # HubSpot ↔ Stripe Billing Sync
 
-**Public showcase.** Sales can't see billing status in the CRM, so reps call customers whose card just failed without knowing it. This project keeps HubSpot and Stripe in step: Stripe billing events update HubSpot records, deals and tasks, and plan changes made in HubSpot flow back to Stripe.
+**Public showcase.** Sales can't see billing status in the CRM, so reps call customers whose card just failed without knowing it. This project keeps HubSpot and Stripe in step: Stripe billing events update HubSpot records and deals, and plan changes made in HubSpot flow back to Stripe.
 
 Fictional company: **Northwind Loop**, a B2B SaaS selling Starter / Growth / Scale plans. All data is fake (Faker, Stripe test mode, HubSpot developer test account).
 
-> Status: Phases 1–2 complete (data model, Stripe → HubSpot sync). Phases 3–4 in progress. Items not built yet are marked *Roadmap*.
+> Status: Phases 1–3 complete (data model, two-way sync). Phase 4 in progress. Items not built yet are marked *Roadmap*.
 
 ## Architecture
 ![Architecture](docs/architecture.png)
@@ -27,7 +27,6 @@ Fictional company: **Northwind Loop**, a B2B SaaS selling Starter / Growth / Sca
 30 fictional companies on reserved `example.com` subdomains with one or two contacts each, generated with a fixed seed so results are reproducible.
 
 ## Roadmap
-- HubSpot → Stripe plan sync with loop guard
 - Payment-failed workflow, revenue dashboard, pytest + GitHub Actions
 
 ## Contact
@@ -66,3 +65,24 @@ A FastAPI service receives Stripe webhooks and keeps HubSpot current. Stripe own
 **Timeline**: deal created and closed-won by the integration; HubSpot then promotes the contact to Customer on its own:
 
 ![Sync activity timeline](docs/screenshots/sync-timeline.png)
+
+## Phase 3: HubSpot → Stripe plan changes
+A sales rep changes **Plan tier** on a contact. A HubSpot workflow calls the sync service, which switches the Stripe subscription (with proration). Stripe confirms the change and Phase 2 writes the new MRR and deal amount back to HubSpot.
+
+**Loop guard:** before writing, the service compares HubSpot's plan with what Stripe already has. If they match, it does nothing, so the two systems can never ping-pong.
+
+**Security:** the workflow sends a shared secret in the `X-Sync-Secret` header (stored as a HubSpot secret); calls without it are rejected with 401.
+
+**Resilience:** a dropped connection or HubSpot 429/5xx is retried with backoff. If processing still fails, the service returns 500 so HubSpot retries the webhook.
+
+A real run, including an automatic retry after a dropped connection:
+
+![Workflow run history](docs/screenshots/workflow-history.png)
+
+The result on the contact (Starter, $99 MRR):
+
+![Plan change reflected in HubSpot](docs/screenshots/plan-change.png)
+
+Round trip and loop guard in the service log:
+
+![Sync service log](docs/screenshots/round-trip-log.png)
