@@ -56,10 +56,13 @@ A FastAPI service receives Stripe webhooks and keeps HubSpot current. Stripe own
 3. `python scripts/seed_stripe.py` then `python scripts/simulate_payment_failure.py`
 
 **After the sync** (contact record, billing fields filled by Stripe):
+
 ![Billing fields synced from Stripe](docs/screenshots/billing-synced.png)
 
 **Payment failure** flips the contact to At risk:
+
 ![Contact at risk after a failed payment](docs/screenshots/at-risk.png)
 
 **Timeline**: deal created and closed-won by the integration; HubSpot then promotes the contact to Customer on its own:
+
 ![Sync activity timeline](docs/screenshots/sync-timeline.png)
