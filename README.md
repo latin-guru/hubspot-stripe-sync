@@ -1,10 +1,12 @@
 # HubSpot ↔ Stripe Billing Sync
 
-**Public showcase.** Sales can't see billing status in the CRM, so reps call customers whose card just failed without knowing it. This project keeps HubSpot and Stripe in step: Stripe billing events update HubSpot records and deals, and plan changes made in HubSpot flow back to Stripe.
+[![tests](https://github.com/latin-guru/hubspot-stripe-sync/actions/workflows/tests.yml/badge.svg)](https://github.com/latin-guru/hubspot-stripe-sync/actions/workflows/tests.yml)
+
+**Public showcase.** Sales can't see billing status in the CRM, so reps call customers whose card just failed without knowing it. This project keeps HubSpot and Stripe in step: Stripe billing events update HubSpot records, deals and tasks, and plan changes made in HubSpot flow back to Stripe.
 
 Fictional company: **Northwind Loop**, a B2B SaaS selling Starter / Growth / Scale plans. All data is fake (Faker, Stripe test mode, HubSpot developer test account).
 
-> Status: Phases 1–3 complete (data model, two-way sync). Phase 4 in progress. Items not built yet are marked *Roadmap*.
+> Status: Phases 1–4 complete. Sample data in test accounts; see "Honest limits" below.
 
 ## Architecture
 ![Architecture](docs/architecture.png)
@@ -25,12 +27,6 @@ Fictional company: **Northwind Loop**, a B2B SaaS selling Starter / Growth / Sca
 
 ## Sample data
 30 fictional companies on reserved `example.com` subdomains with one or two contacts each, generated with a fixed seed so results are reproducible.
-
-## Roadmap
-- Payment-failed workflow, revenue dashboard, pytest + GitHub Actions
-
-## Contact
-[LinkedIn: Kevin Gaviria](https://www.linkedin.com/in/kevin-gaviria)
 
 ## Phase 2: Stripe → HubSpot sync
 A FastAPI service receives Stripe webhooks and keeps HubSpot current. Stripe owns the billing fields; HubSpot keeps lifecycle and owner.
@@ -86,3 +82,85 @@ The result on the contact (Starter, $99 MRR):
 Round trip and loop guard in the service log:
 
 ![Sync service log](docs/screenshots/round-trip-log.png)
+
+
+## Phase 4: Workflows, dashboard, tests
+
+### HubSpot workflows
+| Workflow | Trigger | Actions |
+|---|---|---|
+| **Payment failed → follow up** | Billing status becomes *At risk* | Create a task for the contact owner ("Call about failed payment", due today) |
+| **New paid customer** | Billing status becomes *Active* | Set lifecycle stage to *Customer* |
+| **Plan tier changed → Stripe** (Phase 3) | Plan tier changes | Send a webhook to the sync service |
+
+The sync service only writes billing fields; HubSpot's own workflows decide what sales does about them. That keeps business rules where an admin can change them without a deploy.
+
+A renewal fails, the account flips to At risk, and the owner gets a task:
+
+![Payment-failed workflow](docs/screenshots/payment-failed-workflow.png)
+
+![Task created for the owner](docs/screenshots/at-risk-task.png)
+
+### Revenue dashboard
+MRR by plan, new customers by month, at-risk accounts and the deal pipeline, built from the synced properties:
+
+![Revenue dashboard](docs/screenshots/dashboard.png)
+
+### Sequence: Stripe → HubSpot
+```mermaid
+sequenceDiagram
+    participant S as Stripe
+    participant Svc as Sync service
+    participant DB as Event store
+    participant H as HubSpot
+    S->>Svc: webhook (signed)
+    Svc->>Svc: verify signature (else 400)
+    Svc->>DB: seen event ID? newer data already applied?
+    alt duplicate or stale
+        Svc-->>S: 200, skipped
+    else new
+        Svc->>H: upsert contact by email, update company by domain
+        Svc->>H: create or update deal (one per subscription)
+        Svc->>DB: record event ID + timestamp
+        Svc-->>S: 200
+    end
+    Note over Svc,S: any error returns 500, so Stripe retries
+```
+
+### Sequence: HubSpot → Stripe
+```mermaid
+sequenceDiagram
+    actor Rep
+    participant H as HubSpot
+    participant Svc as Sync service
+    participant S as Stripe
+    Rep->>H: change Plan tier
+    H->>Svc: workflow webhook + X-Sync-Secret
+    Svc->>H: read contact (plan, Stripe customer ID)
+    Svc->>S: read live subscription
+    alt Stripe already on that plan
+        Svc-->>H: 200, nothing to do (loop guard)
+    else different
+        Svc->>S: switch price (prorated)
+        S->>Svc: customer.subscription.updated
+        Svc->>H: write new MRR + deal amount
+    end
+```
+
+### Testing
+- 89 tests with mocked HubSpot and Stripe; **100% line coverage** of `app/`, with CI failing below 95%
+- Run on Python 3.9 and 3.12 on every push ([Actions](https://github.com/latin-guru/hubspot-stripe-sync/actions))
+- Covers signature rejection, duplicates, out-of-order events, the loop guard, 429 `Retry-After`, 5xx backoff, dropped connections, and 500-so-the-sender-retries
+- Run locally: `pip install -r requirements-dev.txt && pytest`
+
+![GitHub Actions passing](docs/screenshots/ci-passing.png)
+
+### Honest limits / what I'd do next
+- **Sample scale.** 30 fake companies in a test account. Production would need a hosted service (not a laptop tunnel), monitoring and alerting.
+- **SQLite event store.** Fine for one instance; multiple instances would need Postgres or Redis.
+- **Reconciliation job.** Webhooks can be missed if the service is down longer than Stripe's retry window. A nightly job comparing Stripe and HubSpot would catch drift.
+- **One subscription per customer.** Multiple subscriptions or seat-based pricing would need a richer model (e.g., a custom Subscription object in HubSpot).
+- **Shared-secret auth** for the HubSpot workflow. A HubSpot developer-platform app could use HubSpot's request signatures instead.
+
+## Contact
+[LinkedIn: Kevin Gaviria](https://www.linkedin.com/in/kevin-gaviria)

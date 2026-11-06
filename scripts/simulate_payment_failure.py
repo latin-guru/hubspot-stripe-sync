@@ -1,13 +1,12 @@
-"""Make a customer's subscription renewal fail (or recover it), like a real expired card.
+"""Make a customer's payment fail (or recover it), to demo the at-risk flow.
 
-Fail:     swaps the subscription's card to Stripe's always-declining test card and bills
-          the renewal now. The charge fails, Stripe marks the subscription past_due and
-          sends invoice.payment_failed + customer.subscription.updated. HubSpot flips to
-          At risk and stays there until the customer pays.
-Recover:  puts a good test card back and pays the open invoice. Stripe sends invoice.paid
-          and the subscription returns to active.
+Fail:     switches the customer to Stripe's always-declining test card (so future renewals
+          fail too) and charges an invoice the card must pay. Any account credit (e.g. from
+          downgrade prorations) is added to the amount so the card is really charged.
+          Stripe sends invoice.payment_failed and HubSpot flips to At risk.
+Recover:  puts a good test card back and pays anything still open; Stripe sends invoice.paid.
 
-Usage:  python scripts/simulate_payment_failure.py                       (first sample customer)
+Usage:  python scripts/simulate_payment_failure.py
         python scripts/simulate_payment_failure.py --email someone@x.example.com
         python scripts/simulate_payment_failure.py --recover
 """
@@ -21,34 +20,43 @@ def live_subscription(customer_id):
     return next((s for s in subs if s["status"] in ("active", "trialing", "past_due", "unpaid")), None)
 
 
-def fail(cust, sub) -> None:
-    bad = as_dict(stripe.PaymentMethod.attach("pm_card_chargeCustomerFail", customer=cust["id"]))
-    # Bill the renewal now with the declining card. allow_incomplete = don't raise; let it go past_due.
-    updated = as_dict(stripe.Subscription.modify(
-        sub["id"], default_payment_method=bad["id"], billing_cycle_anchor="now",
-        proration_behavior="none", payment_behavior="allow_incomplete"))
-    print(f"Renewal charge declined. Subscription is now: {updated['status']}")
-    print("Watch the sync terminal: invoice.payment_failed -> at_risk, subscription.updated -> at_risk.")
+def fail(cust, sub):
+    bad = as_dict(stripe.PaymentMethod.attach("pm_card_chargeCustomerFail", customer=cust["id"]))["id"]
+    stripe.Customer.modify(cust["id"], invoice_settings={"default_payment_method": bad})
+    stripe.Subscription.modify(sub["id"], default_payment_method=bad)
+
+    credit = max(0, -(as_dict(stripe.Customer.retrieve(cust["id"])).get("balance") or 0))
+    stripe.InvoiceItem.create(customer=cust["id"], amount=4900 + credit, currency="usd",
+                              description="Monthly usage (simulated failed payment)")
+    inv = as_dict(stripe.Invoice.create(
+        customer=cust["id"], collection_method="charge_automatically",
+        pending_invoice_items_behavior="include", default_payment_method=bad, auto_advance=False))
+    inv = as_dict(stripe.Invoice.finalize_invoice(inv["id"]))
+    if inv["status"] == "paid":
+        raise SystemExit("Invoice was covered by account credit; run the script again.")
+    try:
+        stripe.Invoice.pay(inv["id"])
+        print("Unexpected: payment succeeded.")
+    except stripe.error.CardError:
+        print(f"Card declined on ${inv['amount_due'] / 100:.2f}. Invoice {inv['id']} left open until --recover.")
+        print("Watch the sync terminal for 'payment FAILED, at_risk'.")
 
 
-def recover(cust, sub) -> None:
-    good = as_dict(stripe.PaymentMethod.attach("pm_card_visa", customer=cust["id"]))
-    stripe.Subscription.modify(sub["id"], default_payment_method=good["id"])
-    stripe.Customer.modify(cust["id"], invoice_settings={"default_payment_method": good["id"]})
-    open_invoices = as_dict(stripe.Invoice.list(customer=cust["id"], status="open", limit=10))["data"]
-    for inv in open_invoices:
-        stripe.Invoice.pay(inv["id"], payment_method=good["id"])
+def recover(cust, sub):
+    good = as_dict(stripe.PaymentMethod.attach("pm_card_visa", customer=cust["id"]))["id"]
+    stripe.Customer.modify(cust["id"], invoice_settings={"default_payment_method": good})
+    stripe.Subscription.modify(sub["id"], default_payment_method=good)
+    for inv in as_dict(stripe.Invoice.list(customer=cust["id"], status="open", limit=10))["data"]:
+        stripe.Invoice.pay(inv["id"], payment_method=good)
         print(f"Paid open invoice {inv['id']}")
-    status = as_dict(stripe.Subscription.retrieve(sub["id"]))["status"]
-    print(f"Subscription is now: {status}. HubSpot should return to Active.")
+    print("Recovered. HubSpot should return to Active.")
 
 
-def main() -> None:
+def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--email", help="customer email (defaults to the first sample billing contact)")
-    parser.add_argument("--recover", action="store_true", help="fix the card and pay what's owed")
+    parser.add_argument("--email")
+    parser.add_argument("--recover", action="store_true")
     args = parser.parse_args()
-
     email = args.email or billing_contacts()[0][0]["email"]
     cust = find_customer(email)
     if not cust:
@@ -56,8 +64,7 @@ def main() -> None:
     sub = live_subscription(cust["id"])
     if not sub:
         raise SystemExit(f"{email} has no active subscription.")
-
-    print(f"{'Recovering' if args.recover else 'Failing renewal for'} {email} ({sub['id']}, now {sub['status']})")
+    print(f"{'Recovering' if args.recover else 'Failing payment for'} {email} ({sub['id']}, now {sub['status']})")
     recover(cust, sub) if args.recover else fail(cust, sub)
 
 
